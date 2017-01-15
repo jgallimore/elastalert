@@ -33,7 +33,7 @@ setup(
         'simplejson',
         'boto',
         'botocore',
-        'blist',
+        'sortedcontainers',
         'croniter',
         'configparser',
         'aws-requests-auth',
