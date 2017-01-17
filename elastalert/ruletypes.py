@@ -760,14 +760,14 @@ class NewTermsRule(RuleType):
 
 class CardinalityRule(RuleType):
     """ A rule that matches if cardinality of a field is above or below a threshold within a timeframe """
-    required_options = frozenset(['timeframe', 'cardinality_field'])
+    required_options = frozenset(['timeframe'])
 
     def __init__(self, *args):
         super(CardinalityRule, self).__init__(*args)
         if 'max_cardinality' not in self.rules and 'min_cardinality' not in self.rules:
             raise EAException("CardinalityRule must have one of either max_cardinality or min_cardinality")
         self.ts_field = self.rules.get('timestamp_field', '@timestamp')
-        self.cardinality_field = self.rules['cardinality_field']
+        self.cardinality_field = self.rules.get('cardinality_field')
         self.cardinality_cache = {}
         self.first_event = {}
         self.timeframe = self.rules['timeframe']
@@ -786,6 +786,18 @@ class CardinalityRule(RuleType):
             if value is not None:
                 # Store this timestamp as most recent occurence of the term
                 self.cardinality_cache[key][value] = event[self.ts_field]
+                self.check_for_match(key, event)
+
+    def add_terms_data(self, terms):
+        key = self.rules.get('query_key')
+
+        for timestamp, data in terms.iteritems():
+            for item in data:
+                value = item["key"]
+                event = {self.ts_field: timestamp, key: value}
+                self.cardinality_cache.setdefault(key, {})
+                self.first_event.setdefault(key, event[self.ts_field])
+                self.cardinality_cache[key][value] = timestamp
                 self.check_for_match(key, event)
 
     def check_for_match(self, key, event, gc=True):

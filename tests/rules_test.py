@@ -853,6 +853,76 @@ def test_cardinality_min():
     assert len(rule.matches) == 1
 
 
+def test_cardinality_max_terms_query():
+    rules = {'max_cardinality': 4,
+             'timeframe': datetime.timedelta(minutes=10),
+             'query_key': 'user',
+             'timestamp_field': '@timestamp',
+             'use_terms_query': 'true'}
+
+    rule = CardinalityRule(rules)
+
+    # Add 4 different usernames
+    users = ['bill', 'coach', 'zoey', 'louis']
+    terms = {datetime.datetime.now(): [{"key": user} for user in users]}
+    rule.add_terms_data(terms)
+
+    assert len(rule.matches) == 0
+    rule.garbage_collect(datetime.datetime.now())
+
+    # Add a duplicate, stay at 4 cardinality
+    users = ['bill', 'coach', 'zoey', 'louis', 'bill']
+    terms = {datetime.datetime.now(): [{"key": user} for user in users]}
+    rule.add_terms_data(terms)
+
+    # Next unique will trigger
+    users = ['me']
+    terms = {datetime.datetime.now(): [{"key": user} for user in users]}
+    rule.add_terms_data(terms)
+
+    assert len(rule.matches) == 1
+    rule.matches = []
+
+    # 15 minutes later, adding more will not trigger an alert
+    users = ['nick', 'rochelle', 'ellis']
+    new_time = datetime.datetime.now() + datetime.timedelta(minutes=15)
+
+    terms = {new_time: [{"key": user} for user in users]}
+    rule.add_terms_data(terms)
+    assert len(rule.matches) == 0
+
+
+def test_cardinality_min_terms_query():
+    rules = {'min_cardinality': 4,
+             'timeframe': datetime.timedelta(minutes=10),
+             'query_key': 'user',
+             'use_terms_query': 'true',
+             'timestamp_field': '@timestamp'}
+    rule = CardinalityRule(rules)
+
+    # Add 2 different usernames, no alert because time hasn't elapsed
+    users = ['foo', 'bar']
+    terms = {datetime.datetime.now(): [{"key": user} for user in users]}
+    rule.add_terms_data(terms)
+    assert len(rule.matches) == 0
+    rule.garbage_collect(datetime.datetime.now())
+
+    # Add 3 more unique ad t+5 mins
+    users = ['faz', 'fuz', 'fiz']
+    terms = {datetime.datetime.now() + datetime.timedelta(minutes=5): [{"key": user} for user in users]}
+    rule.add_terms_data(terms)
+    rule.garbage_collect(datetime.datetime.now() + datetime.timedelta(minutes=5))
+    assert len(rule.matches) == 0
+
+    # Adding the same one again at T+15 causes an alert
+    users = ['faz']
+    terms = {datetime.datetime.now() + datetime.timedelta(minutes=15): [{"key": user} for user in users]}
+
+    rule.add_terms_data(terms)
+    rule.garbage_collect(datetime.datetime.now() + datetime.timedelta(minutes=15))
+    assert len(rule.matches) == 1
+
+
 def test_cardinality_qk():
     rules = {'max_cardinality': 2,
              'timeframe': datetime.timedelta(minutes=10),
